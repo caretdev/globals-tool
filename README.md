@@ -14,3 +14,23 @@ Search  global name
 
 Data for the global with endless scroll, and search by globals. Easy filtering, by clicking on subscripts deep and back by global name.
 ![namespaces](https://raw.githubusercontent.com/caretdev/globals-tool/main/images/global.png)
+
+Installation
+----
+
+```shell
+docker-compose up -d --build
+```
+
+Usage
+----
+
+Get the port from docker-compose output
+```shell
+docker-compose ps
+
+NAME                  COMMAND                  SERVICE             STATUS              PORTS
+globals-tool-iris-1   "/tini -- /iris-main…"   iris                running (healthy)   0.0.0.0:49653->1972/tcp, 0.0.0.0:49654->52773/tcp
+```
+
+Open by link http://localhost:49654/globals/index.html
