@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+  <Document name="globals-tool.ZPM">
+    <Module>
+      <Name>globals-tool</Name>
+      <Version>0.1.0</Version>
+      <Keywords>globals</Keywords>
+      <Description>Globals tool, view and edit globals</Description>
+      <Packaging>module</Packaging>
+      <SourcesRoot>src</SourcesRoot>
+      <Resource Name="caretdev.Globals.PKG"/>
+      <UnitTest Name="/tests" Package="UnitTest" Phase="test"/>
+      <CSPApplication
+        Name="/web"
+        Directory="${cspdir}/globals"
+        Url="/globals"
+        MatchRoles=":${dbrole}"
+        Recurse="1"
+        ServeFiles="1"
+        UnauthenticatedEnabled="1"
+        PasswordAuthEnabled="0"
+        UseSessionCookie="2"
+        />
+        <CSPApplication
+        Name="/web"
+        Directory="${cspdir}/globals"
+        Url="/globals/api"
+        DispatchClass="caretdev.Globals.API"
+        MatchRoles=":${dbrole}:%All"
+        Recurse="1"
+        ServeFiles="1"
+        UnauthenticatedEnabled="1"
+        PasswordAuthEnabled="0"
+        UseSessionCookie="2"
+      />
+    </Module>
+  </Document>
+</Export>

@@ -1,0 +1,45 @@
+.navbar-brand:hover {
+  /* text-decoration: underline; */
+  color: #bbb!important;
+  cursor: pointer;
+}
+
+table.globals {
+  counter-reset: globals;
+  max-width: 100vw;
+}
+
+table.globals tr {
+  counter-increment: globals;
+}
+
+table.globals td:first-child::before {
+  content: counter(globals) ": ";
+}
+
+table.globals td {
+  padding: 0;
+}
+
+table.globals td:last-child {
+  width: 90%;
+  max-width: 50vw;
+}
+
+table.globals td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-top: 0.25rem!important;
+  font-family: "monaco";
+  font-size: 0.7em;
+}
+
+.breadcrumb-item:hover {
+  text-decoration: underline;
+}
+
+a:hover {
+  text-decoration: underline!important;
+  cursor: pointer;
+}
