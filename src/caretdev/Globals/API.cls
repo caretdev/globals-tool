@@ -78,7 +78,7 @@ ClassMethod GetNamespaces() As %Status
   Return $$$OK
 }
 
-ClassMethod ReadParams(paramsList...)
+ClassMethod ReadParams(paramsList...) As %String
 {
   Try {
     Set request = {}.%FromJSON(%request.Content)
