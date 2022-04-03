@@ -26,11 +26,11 @@
         Directory="${cspdir}/globals"
         Url="/globals/api"
         DispatchClass="caretdev.Globals.API"
-        MatchRoles=":${dbrole}:%All"
+        MatchRoles=""
         Recurse="1"
         ServeFiles="1"
-        UnauthenticatedEnabled="1"
-        PasswordAuthEnabled="0"
+        UnauthenticatedEnabled="0"
+        PasswordAuthEnabled="1"
         UseSessionCookie="2"
       />
     </Module>
