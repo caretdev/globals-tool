@@ -26,7 +26,6 @@
         Directory="${cspdir}/globals"
         Url="/globals/api"
         DispatchClass="caretdev.Globals.API"
-        MatchRoles=""
         Recurse="1"
         ServeFiles="1"
         UnauthenticatedEnabled="0"
