@@ -128,9 +128,10 @@ class GlobalTop extends React.Component {
   updateFilter() {
     let globals
     if (this.props.filter) {
-      const filter = new RegExp(this.props.filter, 'i')
+      const filter = this.props.filter.toLowerCase()
       globals = this.state.originalGlobals.filter((el) => {
-        return filter.test(el.Name) || filter.test(el.Collation) || filter.test(el.Location)
+        const values = [el.Name, el.Collation, el.Location]
+        return values.find(v => v.toLowerCase().includes(filter))
       })
     } else {
       globals = this.state.originalGlobals
