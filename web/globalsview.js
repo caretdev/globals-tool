@@ -15,6 +15,30 @@ const {
   Navbar,
 } = ReactBootstrap
 
+class ModalDialog extends React.Component {
+  render() {
+    return (
+      <Modal
+        {...this.props}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title id="contained-modal-title-vcenter">
+            {this.props.title}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {this.props.children}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={(e) => this.props.onHide(e)}>Cancel</Button>
+          <Button onClick={(e) => this.props.onOK(e)}>{this.props.buttonOk}</Button>
+        </Modal.Footer>
+      </Modal>
+    )
+  }
+}
+
 class NamespacesList extends React.Component {
 
   constructor(props) {
@@ -38,7 +62,6 @@ class NamespacesList extends React.Component {
         ? (a, b) => a[column] > b[column] ? 1 : -1
         : (a, b) => a[column] < b[column] ? 1 : -1
     )
-    console.log(column, direction)
     this.setState({ namespaces, sorting: column, direction })
   }
 
@@ -69,6 +92,46 @@ class NamespacesList extends React.Component {
     this.setState({ namespaces })
   }
 
+  getFree(directory) {
+    if (directory.startsWith('^^')) {
+      directory = directory.substr(2)
+    }
+    const body = JSON.stringify({
+      directory,
+    })
+
+    fetch("api/free", {
+      method: 'POST',
+      body,
+    })
+      .then(response => response.json())
+      .then((data) => {
+        const { directory, free } = data
+        const namespaces = this.state.namespaces.map(el => {
+          if (el.Namespace === "^^" + directory) {
+            el.Free = free
+          }
+          return el
+        })
+        this.setState({ namespaces, originalNamespaces: namespaces })
+      })
+
+  }
+
+  renderColumn(row, column) {
+    switch (column) {
+      case 'Namespace': return <a onClick={() => this.props.onSelect(row.Namespace)}>{row.Namespace}</a>
+      case 'Free': return row.Free === -2 ? <></> : (
+        <a title={"Calculate"} onClick={() => this.getFree(row.Namespace)}>{row.Free >= 0 ? row.Free : "Free"}</a>
+      )
+      default: {
+        return typeof row[column] == "boolean"
+          ? (<Form.Check type="checkbox" disabled checked={row[column]}></Form.Check>)
+          : row[column]
+      }
+    }
+  }
+
   render() {
     return (
       <Table>
@@ -80,16 +143,9 @@ class NamespacesList extends React.Component {
           </tr>
         </thead>
         <tbody>
-          {this.state.namespaces.map((namespace, ind) => (
-            <tr style={{ cursor: 'pointer' }} onClick={() => this.props.onSelect(namespace.Namespace)}>
-              {this.state.columns.map(column => (
-                <td>
-                  {typeof namespace[column] == "boolean"
-                    ? (<Form.Check type="checkbox" disabled checked={namespace[column]}></Form.Check>)
-                    : namespace[column]
-                  }
-                </td>
-              ))}
+          {this.state.namespaces.map((namespace) => (
+            <tr>
+              {this.state.columns.map(column => <td>{this.renderColumn(namespace, column)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -108,6 +164,8 @@ class GlobalTop extends React.Component {
     this.getGlobals();
     this.updateFilter = this.updateFilter.bind(this)
     this.getSize = this.getSize.bind(this)
+    this.export = this.export.bind(this)
+    this.doExport = this.doExport.bind(this)
   }
 
   getGlobals() {
@@ -165,10 +223,57 @@ class GlobalTop extends React.Component {
       })
   }
 
+  setForm(name, value) {
+    const formData = this.state.formData
+    formData[name] = value
+    this.setState({ formData })
+  }
+
+  export() {
+    if (this.state.globals.find(el => el.Selected)) {
+      const formData = {
+        format: 'xml',
+        gzip: true,
+      }
+      this.setState({ exportDialog: true, formData })
+    } else {
+      alert('No globals were selected')
+    }
+  }
+
+  doExport(_event) {
+    const { format, gzip } = this.state.formData
+
+    const namespace = this.props.namespace
+    const globals = this.state.globals.filter(el => el.Selected).map(el => el.Name.split('(')[0])
+    const body = JSON.stringify({
+      namespace,
+      globals,
+      format,
+      gzip,
+    })
+
+    fetch("api/export", {
+      method: 'POST',
+      body,
+    }).then(async response => ({
+      filename: response.headers.get('content-disposition').split('filename=')[1],
+      blob: await response.blob(),
+    }))
+      .then(({ filename, blob }) => {
+        var a = document.createElement("a");
+        a.href = window.URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+      })
+
+    this.setState({ exportDialog: false, formData: null })
+  }
+
   renderColumn(row, column) {
     switch (column) {
       case 'Name': return <a onClick={() => this.props.onSelect(row.Name)}>{row.Name}</a>
-      case 'Size': return <a onClick={() => this.getSize(row.Location || this.props.namespace, row.Name)}>{row.Size >= 0 ? row.Size : "Size"}</a>
+      case 'Size': return <a title={"Calculate Size"} onClick={() => this.getSize(row.Location || this.props.namespace, row.Name)}>{row.Size >= 0 ? row.Size : "Size"}</a>
       default: {
         return typeof row[column] == "boolean"
           ? (<Form.Check type="checkbox" disabled checked={row[column]}></Form.Check>)
@@ -177,28 +282,94 @@ class GlobalTop extends React.Component {
     }
   }
 
+  selectAll(checked) {
+    const globals = this.state.globals.map(el => {
+      el.Selected = checked
+      return el
+    })
+    this.setState({ globals })
+  }
+
+  select(global, checked) {
+    const globals = this.state.globals.map(el => {
+      if (el.Name === global) {
+        el.Selected = checked
+      }
+      return el
+    })
+    this.setState({ globals })
+  }
+
   render() {
     return (
-      <Table>
-        <thead>
-          <tr>
-            <th style={{ width: "1rem" }}><Form.Check type="checkbox"></Form.Check></th>
-            {this.state.columns.map(column => (
-              <th>{column}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {this.state.globals.map((global, ind) => (
+      <>
+        <Table>
+          <thead>
             <tr>
-              <td><Form.Check type="checkbox"></Form.Check></td>
-              {this.state.columns.map((column, i) => (
-                <td>{this.renderColumn(global, column)}</td>
+              <th style={{ width: "1rem" }}><Form.Check onChange={(e) => this.selectAll(e.target.checked)} type="checkbox"></Form.Check></th>
+              {this.state.columns.map(column => (
+                <th>{column}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </Table>
+          </thead>
+          <tbody>
+            {this.state.globals.map((global, ind) => (
+              <tr>
+                <td><Form.Check type="checkbox" checked={global.Selected} onChange={(e) => this.select(global.Name, e.target.checked)} ></Form.Check></td>
+                {this.state.columns.map((column, i) => (
+                  <td>{this.renderColumn(global, column)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+        <ModalDialog
+          show={this.state.exportDialog}
+          size="lg"
+          aria-labelledby="contained-modal-title-vcenter"
+          buttonOk={"Export"}
+          title={"Export"}
+          onHide={() => this.setState({ exportDialog: false })}
+          onOK={(_) => this.doExport()}
+        >
+          {this.state.formData && (
+            <>
+              <p>{`Export ${this.state.globals.filter(el => el.Selected).length} globals from ${this.props.namespace}`}</p>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={2}>Format</Form.Label>
+                <Col>
+                  <Form.Check
+                    inline
+                    label="XML"
+                    type="radio"
+                    name="exportFormat"
+                    checked={this.state.formData.format === 'xml'}
+                    onChange={() => { this.setForm('format', 'xml') }}
+                  />
+                  <Form.Check
+                    inline
+                    label="GOF"
+                    type="radio"
+                    name="exportFormat"
+                    checked={this.state.formData.format === 'gof'}
+                    onChange={() => { this.setForm('format', 'gof') }}
+                  />
+                </Col>
+              </Form.Group>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={2}>GZip</Form.Label>
+                <Col>
+                  <Form.Check
+                    type="checkbox"
+                    checked={this.state.formData.gzip}
+                    onChange={(e) => { this.setForm('gzip', e.target.checked) }}
+                  />
+                </Col>
+              </Form.Group>
+            </>
+          )}
+        </ModalDialog>
+      </>
     )
   }
 }
@@ -217,7 +388,7 @@ class GlobalData extends React.Component {
     this.getData = this.getData.bind(this)
   }
 
-  getData(reset = false, search="") {
+  getData(reset = false, search = "") {
     let mask = this.props.global
     if (this.state.subscripts.length) {
       mask += "(" + this.state.subscripts.join(",")
@@ -249,10 +420,6 @@ class GlobalData extends React.Component {
     if (props.filter !== this.props.filter) {
       this.getData(true, this.props.filter)
     }
-  }
-
-  doSearch() {
-
   }
 
   globalName(global) {
@@ -313,12 +480,14 @@ class GlobalData extends React.Component {
 class GlobalsView extends React.Component {
   constructor(props) {
     super(props);
+    this.mainRef = React.createRef();
 
     this.state = {
       namespace: null,
       global: null,
       subscripts: null,
-      ...this.readParams()
+      menu: {},
+      ...this.readParams(),
     };
 
     this.selectNamespace = this.selectNamespace.bind(this);
@@ -354,20 +523,49 @@ class GlobalsView extends React.Component {
     updateParam('global', global)
   }
 
+  checkMenu() {
+    if (this.mainRef.current) {
+      const menu = {}
+      const list = ['export']
+      list.forEach(item => {
+        const flag = this.mainRef.current[item] !== undefined
+        if (this.state.menu[item] !== flag) {
+          menu[item] = flag
+        }
+      })
+      if (Object.keys(menu).length) {
+        this.setState({ menu })
+      }
+    }
+  }
+
+  componentDidMount() {
+    this.checkMenu()
+  }
+
+  componentDidUpdate(prevProps, prevState, snapshot) {
+    this.checkMenu()
+  }
+
   render() {
     return (
       <>
         <Navbar bg="dark" variant="dark" expand="lg">
           <Container fluid>
-            <Nav>
-              <Nav.Item><Nav.Link onClick={() => { this.selectNamespace(null) }}>Namespaces</Nav.Link></Nav.Item>
-              {this.state.namespace &&
-                <Nav.Item ><Nav.Link onClick={() => { this.selectGlobal(null) }}>{this.state.namespace}</Nav.Link></Nav.Item>
-              }
-              {this.state.global &&
-                <Nav.Item><Nav.Link disabled>{this.state.global}</Nav.Link></Nav.Item>
-              }
-            </Nav>
+            <Navbar.Collapse id="basic-navbar-nav">
+              <Nav className="me-auto">
+                <Nav.Item><Nav.Link onClick={() => { this.selectNamespace(null) }}>Namespaces</Nav.Link></Nav.Item>
+                {this.state.namespace &&
+                  <Nav.Item ><Nav.Link onClick={() => { this.selectGlobal(null) }}>{this.state.namespace}</Nav.Link></Nav.Item>
+                }
+                {this.state.global &&
+                  <Nav.Item><Nav.Link disabled>{this.state.global}</Nav.Link></Nav.Item>
+                }
+              </Nav>
+              <Nav>
+                {this.state.menu.export && <Nav.Link onClick={() => this.mainRef.current.export()}>Export</Nav.Link>}
+              </Nav>
+            </Navbar.Collapse>
           </Container>
         </Navbar>
         <Navbar bg="light" expand="lg" sticky="top">
@@ -383,10 +581,10 @@ class GlobalsView extends React.Component {
           {this.state.namespace
             ? (
               this.state.global
-                ? <GlobalData namespace={this.state.namespace} filter={this.state.search} global={this.state.global} />
-                : <GlobalTop namespace={this.state.namespace} filter={this.state.search} onSelect={(name) => this.selectGlobal(name)} />
+                ? <GlobalData ref={this.mainRef} namespace={this.state.namespace} filter={this.state.search} global={this.state.global} />
+                : <GlobalTop ref={this.mainRef} namespace={this.state.namespace} filter={this.state.search} onSelect={(name) => this.selectGlobal(name)} />
             )
-            : <NamespacesList filter={this.state.search} onSelect={(name) => this.selectNamespace(name)} />
+            : <NamespacesList ref={this.mainRef} filter={this.state.search} onSelect={(name) => this.selectNamespace(name)} />
           }
         </Container>
       </>
