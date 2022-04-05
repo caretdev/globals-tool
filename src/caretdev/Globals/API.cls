@@ -10,7 +10,7 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
 <Routes>
 
 <Route Url="/namespaces" Method="GET" Call="GetNamespaces" Cors="true"/>
-<Route Url="/globals/(.*)" Method="GET" Call="GetGlobals" Cors="true"/>
+<Route Url="/globals" Method="POST" Call="GetGlobals" Cors="true"/>
 <Route Url="/data" Method="POST" Call="GetData" Cors="true"/>
 <Route Url="/free" Method="POST" Call="GetFree" Cors="true"/>
 <Route Url="/size" Method="POST" Call="GetSize" Cors="true"/>
@@ -110,11 +110,11 @@ ClassMethod ReadParams(paramsList...) As %String
   Quit result
 }
 
-ClassMethod GetGlobals(namespace) As %Status
+ClassMethod GetGlobals() As %Status
 {
   Set mask = "*"
   Set ignoreHasData = 0
-  Set $ListBuild(system, mapped) = ..ReadParams("system", "mapped")
+  Set $ListBuild(namespace, system, mapped) = ..ReadParams("namespace", "system", "mapped")
   Set:system="" system = 1
   Set:mapped="" mapped = 1
 

@@ -15,6 +15,10 @@ const {
   Navbar,
 } = ReactBootstrap
 
+const globalState = {
+  text: "foo",
+};
+
 class ModalDialog extends React.Component {
   render() {
     return (
@@ -53,6 +57,7 @@ class NamespacesList extends React.Component {
     this.getNamespaces();
     this.changeSorting = this.changeSorting.bind(this)
     this.updateFilter = this.updateFilter.bind(this)
+    this.free = this.free.bind(this)
   }
 
   changeSorting(column) {
@@ -90,6 +95,12 @@ class NamespacesList extends React.Component {
       namespaces = this.state.originalNamespaces
     }
     this.setState({ namespaces })
+  }
+
+  free() {
+    this.state.namespaces.forEach(el => {
+      this.getFree(el.Namespace)
+    })
   }
 
   getFree(directory) {
@@ -159,17 +170,30 @@ class GlobalTop extends React.Component {
     super(props);
     this.state = {
       globals: [],
-      columns: ['Name', 'Location', 'Collation']
+      columns: ['Name', 'Location', 'Collation'],
+      system: this.props.system,
     }
     this.getGlobals();
     this.updateFilter = this.updateFilter.bind(this)
     this.getSize = this.getSize.bind(this)
-    this.export = this.export.bind(this)
     this.doExport = this.doExport.bind(this)
+
+    this.size = this.size.bind(this)
+    this.export = this.export.bind(this)
+    this.system = this.system.bind(this)
+    this.systemGet = this.systemGet.bind(this)
   }
 
   getGlobals() {
-    fetch("api/globals/" + encodeURI(this.props.namespace))
+    const body = JSON.stringify({
+      namespace: this.props.namespace,
+      system: this.state.system,
+    })
+
+    fetch("api/globals", {
+      'method': 'POST',
+      body,
+    })
       .then(response => response.json())
       .then((globals) => {
         const columns = getColumns(globals)
@@ -177,9 +201,21 @@ class GlobalTop extends React.Component {
       })
   }
 
+  systemGet() {
+    return this.state.system
+  }
+
+  system(system) {
+    this.setState({ system })
+  }
+
   componentDidUpdate(props, state) {
     if (props.filter !== this.props.filter) {
       this.updateFilter()
+    }
+    if (state.system !== this.state.system) {
+      this.getGlobals()
+      localStorage.setItem('system', this.state.system)
     }
   }
 
@@ -189,12 +225,28 @@ class GlobalTop extends React.Component {
       const filter = this.props.filter.toLowerCase()
       globals = this.state.originalGlobals.filter((el) => {
         const values = [el.Name, el.Collation, el.Location]
-        return values.find(v => v.toLowerCase().includes(filter))
+        return values.find(v => v && v.toLowerCase().includes(filter))
       })
     } else {
       globals = this.state.originalGlobals
     }
     this.setState({ globals })
+  }
+
+  changeSorting(column) {
+    const direction = this.state.sorting === column ? !this.state.direction : true;
+    const globals = this.state.globals.sort(
+      direction
+        ? (a, b) => a[column] > b[column] ? 1 : -1
+        : (a, b) => a[column] < b[column] ? 1 : -1
+    )
+    this.setState({ globals, sorting: column, direction })
+  }
+
+  size() {
+    this.state.globals.forEach(el => {
+      this.getSize(el.Location || this.props.namespace, el.Name)
+    })
   }
 
   getSize(location, global) {
@@ -308,7 +360,13 @@ class GlobalTop extends React.Component {
             <tr>
               <th style={{ width: "1rem" }}><Form.Check onChange={(e) => this.selectAll(e.target.checked)} type="checkbox"></Form.Check></th>
               {this.state.columns.map(column => (
-                <th>{column}</th>
+                <>
+                  {
+                    column === 'Name' || column === 'Size'
+                      ? <th style={{ cursor: 'pointer' }} onClick={() => this.changeSorting(column)}>{column}</th>
+                      : <th>{column}</th>
+                  }
+                </>
               ))}
             </tr>
           </thead>
@@ -386,6 +444,11 @@ class GlobalData extends React.Component {
 
     this.getData()
     this.getData = this.getData.bind(this)
+    this.levels = this.levels.bind(this)
+  }
+
+  levels(levels) {
+    this.setState({ levels })
   }
 
   getData(reset = false, search = "") {
@@ -393,6 +456,13 @@ class GlobalData extends React.Component {
     if (this.state.subscripts.length) {
       mask += "(" + this.state.subscripts.join(",")
     }
+    if (this.state.levels) {
+      const levels = this.state.levels.split(',')[0]
+      mask += mask.includes('(') ? '' : '('
+      mask += ','.repeat(levels)
+      mask += this.state.levels.includes('*') ? '' : ')'
+    }
+    this.props.onMaskUpdate(mask)
     const namespace = this.props.namespace
     const lastNode = reset ? '' : this.state.lastNode
     const body = JSON.stringify({
@@ -415,6 +485,9 @@ class GlobalData extends React.Component {
 
   componentDidUpdate(props, state) {
     if (!same(state.subscripts, this.state.subscripts)) {
+      this.getData(true)
+    }
+    if (state.levels !== this.state.levels) {
       this.getData(true)
     }
     if (props.filter !== this.props.filter) {
@@ -488,6 +561,7 @@ class GlobalsView extends React.Component {
       subscripts: null,
       menu: {},
       ...this.readParams(),
+      system: localStorage.getItem('system') === 'true',
     };
 
     this.selectNamespace = this.selectNamespace.bind(this);
@@ -523,28 +597,34 @@ class GlobalsView extends React.Component {
     updateParam('global', global)
   }
 
-  checkMenu() {
-    if (this.mainRef.current) {
-      const menu = {}
-      const list = ['export']
-      list.forEach(item => {
-        const flag = this.mainRef.current[item] !== undefined
-        if (this.state.menu[item] !== flag) {
-          menu[item] = flag
-        }
-      })
-      if (Object.keys(menu).length) {
-        this.setState({ menu })
+  renderActions() {
+    const actions = []
+    if (this.state.namespace) {
+      if (this.state.global) {
+        actions.push(<Form.Select onChange={(e) => this.mainRef.current.levels(e.target.value)}>
+          {Array(10).fill().map((_, i) => (
+            <>
+              <option>{i},*</option>
+              <option>{i}</option>
+            </>
+          ))}
+        </Form.Select>)
+      } else {
+        actions.push(<Form.Check
+          className="nav-link"
+          type="switch" label="System"
+          checked={this.state.system}
+          onChange={(e) => {
+            this.mainRef.current.system(e.target.checked)
+            this.setState({ system: e.target.checked })
+          }} />)
+        actions.push(<Nav.Link onClick={() => this.mainRef.current.size()}>Size</Nav.Link>)
+        actions.push(<Nav.Link onClick={() => this.mainRef.current.export()}>Export</Nav.Link>)
       }
+    } else {
+      actions.push(<Nav.Link onClick={() => this.mainRef.current.free()}>Free</Nav.Link>)
     }
-  }
-
-  componentDidMount() {
-    this.checkMenu()
-  }
-
-  componentDidUpdate(prevProps, prevState, snapshot) {
-    this.checkMenu()
+    return actions
   }
 
   render() {
@@ -559,11 +639,11 @@ class GlobalsView extends React.Component {
                   <Nav.Item ><Nav.Link onClick={() => { this.selectGlobal(null) }}>{this.state.namespace}</Nav.Link></Nav.Item>
                 }
                 {this.state.global &&
-                  <Nav.Item><Nav.Link disabled>{this.state.global}</Nav.Link></Nav.Item>
+                  <Nav.Item><Nav.Link disabled>{this.state.mask || this.state.global}</Nav.Link></Nav.Item>
                 }
               </Nav>
               <Nav>
-                {this.state.menu.export && <Nav.Link onClick={() => this.mainRef.current.export()}>Export</Nav.Link>}
+                {this.renderActions()}
               </Nav>
             </Navbar.Collapse>
           </Container>
@@ -581,8 +661,20 @@ class GlobalsView extends React.Component {
           {this.state.namespace
             ? (
               this.state.global
-                ? <GlobalData ref={this.mainRef} namespace={this.state.namespace} filter={this.state.search} global={this.state.global} />
-                : <GlobalTop ref={this.mainRef} namespace={this.state.namespace} filter={this.state.search} onSelect={(name) => this.selectGlobal(name)} />
+                ? <GlobalData
+                  ref={this.mainRef}
+                  namespace={this.state.namespace}
+                  filter={this.state.search}
+                  global={this.state.global}
+                  onMaskUpdate={(mask) => this.setState({ mask })}
+                />
+                : <GlobalTop
+                  ref={this.mainRef}
+                  namespace={this.state.namespace}
+                  filter={this.state.search}
+                  system={this.state.system}
+                  onSelect={(name) => this.selectGlobal(name)}
+                />
             )
             : <NamespacesList ref={this.mainRef} filter={this.state.search} onSelect={(name) => this.selectNamespace(name)} />
           }
