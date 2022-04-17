@@ -80,14 +80,16 @@ ClassMethod GetNamespaces() As %Status
     Set info.StateInt = tRS.StateInt
     Do result.%Push(info)
   }
-  Do result.%ToJSON()
+  Set stream = ##class(%Stream.GlobalCharacter).%New()
+  Do result.%ToJSON(.stream)
+  Do stream.OutputToDevice()
   Return $$$OK
 }
 
 ClassMethod ReadParams(paramsList...) As %String
 {
   Try {
-    Set request = {}.%FromJSON(%request.Content)
+    Set request = ##class(%DynamicObject).%FromJSON(%request.Content)
   } Catch {
     Set request = {}
   }
@@ -96,7 +98,7 @@ ClassMethod ReadParams(paramsList...) As %String
   For i=1:1:paramsList {
     Set name = paramsList(i)
     Set value = %request.Get(name)
-    Set value = request.%Get(name, value)
+    Set value = $select(request.%IsDefined(name): request.%Get(name), 1: value)
     If $IsObject(value) {
       Set iter = value.%GetIterator()
       Set value = ""
@@ -143,7 +145,10 @@ ClassMethod GetGlobals() As %Status
     Do result.%Push(info)
   }
 
-  Do result.%ToJSON()
+  Set stream = ##class(%Stream.GlobalCharacter).%New()
+  Do result.%ToJSON(.stream)
+  Do stream.OutputToDevice()
+
   Return $$$OK
 }
 
@@ -201,7 +206,10 @@ ClassMethod GetData()
     "items": (result)
   }
 
-  Do wrapper.%ToJSON()
+  Set stream = ##class(%Stream.GlobalCharacter).%New()
+  Do wrapper.%ToJSON(.stream)
+  Do stream.OutputToDevice()
+
   Return $$$OK
 }
 
@@ -219,7 +227,10 @@ ClassMethod GetSize() As %Status
 
   Set @..#CACHEGN@("Size", directory, global) = size
 
-  Do result.%ToJSON()
+  Set stream = ##class(%Stream.GlobalCharacter).%New()
+  Do result.%ToJSON(.stream)
+  Do stream.OutputToDevice()
+
   Return $$$OK
 }
 
@@ -236,7 +247,10 @@ ClassMethod GetFree() As %Status
 
   Set @..#CACHEGN@("Free", directory) = free
 
-  Do result.%ToJSON()
+  Set stream = ##class(%Stream.GlobalCharacter).%New()
+  Do result.%ToJSON(.stream)
+  Do stream.OutputToDevice()
+
   Return $$$OK
 }
 
